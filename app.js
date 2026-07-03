@@ -6,6 +6,7 @@ import {
     DisconnectReason,
     fetchLatestBaileysVersion,
     initAuthCreds,
+    Browsers,
     BufferJSON,
     useMultiFileAuthState
 } from '@whiskeysockets/baileys';
@@ -164,13 +165,14 @@ app.post('/api/wa/start', async (req, res) => {
         const { version } = await fetchLatestBaileysVersion();
 
         const sock = makeWASocket({
-            auth: state,
-            printQRInTerminal: false,
-            logger: pino({ level: 'silent' }),
-            browser: ['Ruang Restu', 'Safari', '1.0.0'],
-            version,
-            syncFullHistory: false
-        });
+    auth: state,
+    printQRInTerminal: false,
+    logger: pino({ level: 'silent' }),
+    // 🔥 UBAH BARIS INI:
+    browser: Browsers.ubuntu('Chrome'), 
+    version,
+    syncFullHistory: false
+});
 
         sessions[session_id] = sock;
         sock.ev.on('creds.update', saveCreds);
@@ -203,39 +205,39 @@ app.post('/api/wa/start', async (req, res) => {
                 }
 
                 if (connection === 'close') {
-                    const statusCode = lastDisconnect?.error?.output?.statusCode;
-                    const isLoggedOut = [DisconnectReason.loggedOut, 401, 405].includes(statusCode);
-                    const currentStatus = qrData[session_id]?.status;
-                    const shouldReconnectNow = currentStatus === 'connected' || currentStatus === 'reconnecting';
+    // Ambil status code dengan aman
+    const error = lastDisconnect?.error;
+    const statusCode = error?.output?.statusCode || error?.output?.payload?.statusCode;
+    const isLoggedOut = [DisconnectReason.loggedOut, 401, 403, 405].includes(statusCode);
 
-                    console.log(`[WA] ${session_id} CLOSED. Code: ${statusCode}`);
+    console.log(`[WA] ${session_id} CLOSED. Code: ${statusCode}`);
 
-                    if (isLoggedOut || killedSessions[session_id]) {
-                        delete sessions[session_id];
-                        delete qrData[session_id];
+    if (isLoggedOut || killedSessions[session_id]) {
+        delete sessions[session_id];
+        delete qrData[session_id];
 
-                        if (fs.existsSync(sessionPath)) {
-                            fs.rmSync(sessionPath, { recursive: true, force: true });
-                        }
+        // Hapus folder karena sesi invalid/ditolak WA
+        if (fs.existsSync(sessionPath)) {
+            fs.rmSync(sessionPath, { recursive: true, force: true });
+            console.log(`[WA] Folder sesi dihapus untuk: ${session_id}`);
+        }
 
-                        if (!killedSessions[session_id]) {
-                            setTimeout(() => connectToWA(), 3000);
-                        }
-                    } else if (shouldReconnectNow) {
-                        qrData[session_id] = {
-                            status: 'reconnecting',
-                            message: 'Menghubungkan ulang ke WhatsApp...',
-                            timestamp: Date.now()
-                        };
-                        setTimeout(() => connectToWA(), 5000);
-                    } else {
-                        qrData[session_id] = {
-                            status: 'connecting',
-                            message: 'Menyambungkan ke WhatsApp...',
-                            timestamp: Date.now()
-                        };
-                    }
-                }
+        if (!killedSessions[session_id]) {
+            setTimeout(() => connectToWA(), 3000);
+        }
+    } else {
+        // 🔥 PERBAIKAN: Selalu panggil connectToWA() untuk reconnect
+        qrData[session_id] = {
+            status: 'connecting',
+            message: 'Menyambungkan ulang ke WhatsApp...',
+            timestamp: Date.now()
+        };
+        console.log(`[WA] ${session_id} Reconnecting...`);
+        
+        // Panggil kembali fungsi koneksi
+        setTimeout(() => connectToWA(), 2500); 
+    }
+}
             });
         } catch (err) {
             delete pendingSessions[session_id];
