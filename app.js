@@ -5,7 +5,10 @@ import {
     makeWASocket,
     useMultiFileAuthState,
     DisconnectReason,
-    fetchLatestBaileysVersion
+    fetchLatestBaileysVersion,
+    initAuthCreds,
+    proto,
+    BufferJSON
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'fs';
@@ -31,6 +34,93 @@ const qrData = {};
 const userInfo = {};
 const killedSessions = {};
 
+// ================= CUSTOM AUTH STATE =================
+// Hanya menyimpan ke disk setelah login berhasil (connected)
+async function useSmartAuthState(sessionPath) {
+    const credsFile = path.join(sessionPath, 'creds.json');
+    const keysDir = path.join(sessionPath, 'keys');
+
+    // Load existing creds jika sudah ada (session lama yang valid)
+    let creds;
+    if (fs.existsSync(credsFile)) {
+        const raw = fs.readFileSync(credsFile, { encoding: 'utf-8' });
+        creds = JSON.parse(raw, BufferJSON.reviver);
+    } else {
+        creds = initAuthCreds();
+    }
+
+    // Load existing keys jika ada
+    const keys = {};
+    if (fs.existsSync(keysDir)) {
+        for (const file of fs.readdirSync(keysDir)) {
+            if (!file.endsWith('.json')) continue;
+            const typeName = file.replace('.json', '');
+            const raw = fs.readFileSync(path.join(keysDir, file), { encoding: 'utf-8' });
+            const parsed = JSON.parse(raw, BufferJSON.reviver);
+            keys[typeName] = parsed;
+        }
+    }
+
+    let isConnected = false;
+
+    const state = {
+        creds,
+        keys: {
+            get(type, ids) {
+                return ids.reduce((dict, id) => {
+                    const val = keys[type]?.[id];
+                    if (val) dict[id] = val;
+                    return dict;
+                }, {});
+            },
+            set(data) {
+                for (const category in data) {
+                    if (!keys[category]) keys[category] = {};
+                    Object.assign(keys[category], data[category]);
+                }
+                // Hanya simpan ke disk jika sudah connected
+                if (isConnected) {
+                    flushKeys();
+                }
+            }
+        }
+    };
+
+    function flushKeys() {
+        if (!fs.existsSync(keysDir)) {
+            fs.mkdirSync(keysDir, { recursive: true });
+        }
+        for (const type in keys) {
+            const filePath = path.join(keysDir, `${type}.json`);
+            fs.writeFileSync(filePath, JSON.stringify(keys[type], BufferJSON.replacer));
+        }
+    }
+
+    function saveCreds() {
+        // Hanya simpan ke disk jika sudah connected
+        if (isConnected) {
+            if (!fs.existsSync(sessionPath)) {
+                fs.mkdirSync(sessionPath, { recursive: true });
+            }
+            fs.writeFileSync(credsFile, JSON.stringify(creds, BufferJSON.replacer));
+        }
+    }
+
+    function setConnected(val) {
+        isConnected = val;
+        if (val) {
+            // Flush semua data yang sudah ada di memori ke disk
+            if (!fs.existsSync(sessionPath)) {
+                fs.mkdirSync(sessionPath, { recursive: true });
+            }
+            fs.writeFileSync(credsFile, JSON.stringify(creds, BufferJSON.replacer));
+            flushKeys();
+        }
+    }
+
+    return { state, saveCreds, setConnected };
+}
+
 // ================= START SESSION =================
 app.post('/api/wa/start', async (req, res) => {
     const { session_id } = req.body;
@@ -50,7 +140,7 @@ app.post('/api/wa/start', async (req, res) => {
 
         try {
             const sessionPath = path.join(sessionDir, session_id);
-            const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+            const { state, saveCreds, setConnected } = await useSmartAuthState(sessionPath);
             const { version } = await fetchLatestBaileysVersion();
 
             const sock = makeWASocket({
@@ -76,6 +166,9 @@ app.post('/api/wa/start', async (req, res) => {
 
                 if (connection === 'open') {
                     console.log(`[WA] ${session_id} CONNECTED ✅`);
+                    // Aktifkan penyimpanan ke disk setelah berhasil login
+                    setConnected(true);
+
                     userInfo[session_id] = {
                         name: sock.user?.name || 'User Ruang Restu',
                         id: sock.user?.id
