@@ -281,11 +281,13 @@ app.post('/api/wa/logout', async (req, res) => {
 // ================= GET STATUS =================
 app.get('/api/wa/status/:session_id', (req, res) => {
     res.set('Content-Type', 'application/json; charset=utf-8');
-    res.json(qrData[req.params.session_id] || { status: 'disconnected' });
+    res.set('Cache-Control', 'no-store');
+    res.status(200).json(qrData[req.params.session_id] || { status: 'disconnected' });
 });
 
 app.get('/', (req, res) => {
     res.set('Content-Type', 'application/json; charset=utf-8');
+    res.set('Cache-Control', 'no-store');
     res.status(200).json({
         status: 'success',
         message: 'WA Engine Ruang Restu is running successfully!'
