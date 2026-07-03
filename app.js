@@ -201,7 +201,7 @@ app.post('/api/wa/start', async (req, res) => {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     const isLoggedOut = [DisconnectReason.loggedOut, 401, 405].includes(statusCode);
                     const currentStatus = qrData[session_id]?.status;
-                    const shouldReconnectNow = currentStatus === 'connected';
+                    const shouldReconnectNow = currentStatus === 'connected' || currentStatus === 'reconnecting';
 
                     console.log(`[WA] ${session_id} CLOSED. Code: ${statusCode}`);
 
@@ -217,6 +217,10 @@ app.post('/api/wa/start', async (req, res) => {
                             setTimeout(() => connectToWA(), 3000);
                         }
                     } else if (shouldReconnectNow) {
+                        qrData[session_id] = {
+                            status: 'reconnecting',
+                            message: 'Menghubungkan ulang ke WhatsApp...'
+                        };
                         setTimeout(() => connectToWA(), 5000);
                     } else {
                         qrData[session_id] = {
