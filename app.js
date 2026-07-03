@@ -167,11 +167,20 @@ app.post('/api/wa/start', async (req, res) => {
         const sock = makeWASocket({
     auth: state,
     printQRInTerminal: false,
-    logger: pino({ level: 'silent' }),
-    // 🔥 UBAH BARIS INI:
-    browser: Browsers.ubuntu('Chrome'), 
+    logger: pino({ level: 'silent' }), // Tetap silent agar tidak membanjiri log hosting
+    browser: Browsers.ubuntu('Chrome'),
     version,
-    syncFullHistory: false
+    
+    // 🔥 OPTIMASI EKSTREM UNTUK SHARED HOSTING
+    syncFullHistory: false,             // Wajib false agar tidak menarik riwayat chat
+    markOnlineOnConnect: false,         // Jangan paksa update status online
+    generateHighQualityLinkPreview: false, 
+    keepAliveIntervalMs: 30000,         // Mencegah Nginx/Apache memutus koneksi
+    
+    // Bypass error jika Baileys mencoba mencari pesan lama
+    getMessage: async (key) => {
+        return { conversation: 'Ruang Restu' };
+    }
 });
 
         sessions[session_id] = sock;
