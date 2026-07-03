@@ -34,6 +34,14 @@ const qrData = {};
 const userInfo = {};
 const killedSessions = {};
 
+function shouldReuseExistingSession(status) {
+    return ['loading', 'qr_ready', 'connected'].includes(status);
+}
+
+function shouldAutoReconnect(status) {
+    return status === 'connected';
+}
+
 // ================= CUSTOM AUTH STATE =================
 // Hanya menyimpan ke disk setelah login berhasil (connected)
 async function useSmartAuthState(sessionPath) {
@@ -129,8 +137,12 @@ app.post('/api/wa/start', async (req, res) => {
 
     delete killedSessions[session_id];
 
-    if (sessions[session_id] && qrData[session_id]?.status === 'connected') {
-        return res.json({ status: 'connected', message: 'Session sudah aktif' });
+    const existingStatus = qrData[session_id]?.status;
+    if (sessions[session_id] && shouldReuseExistingSession(existingStatus)) {
+        if (existingStatus === 'connected') {
+            return res.json({ status: 'connected', message: 'Session sudah aktif' });
+        }
+        return res.json(qrData[session_id] || { status: 'loading', qr: null });
     }
 
     qrData[session_id] = { status: 'loading', qr: null };
@@ -182,6 +194,7 @@ app.post('/api/wa/start', async (req, res) => {
                 if (connection === 'close') {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     const isLoggedOut = [DisconnectReason.loggedOut, 401, 405].includes(statusCode);
+                    const shouldReconnectNow = shouldAutoReconnect(qrData[session_id]?.status);
 
                     console.log(`[WA] ${session_id} CLOSED. Code: ${statusCode}`);
 
@@ -196,8 +209,11 @@ app.post('/api/wa/start', async (req, res) => {
                         if (!killedSessions[session_id]) {
                             setTimeout(() => connectToWA(), 3000);
                         }
-                    } else {
+                    } else if (shouldReconnectNow) {
                         setTimeout(() => connectToWA(), 5000);
+                    } else {
+                        delete sessions[session_id];
+                        qrData[session_id] = { status: 'disconnected' };
                     }
                 }
             });
