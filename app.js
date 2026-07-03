@@ -203,6 +203,13 @@ app.post('/api/wa/start', async (req, res) => {
             });
         } catch (err) {
             console.log(`[WA] CRITICAL ERROR ${session_id}:`, err.message);
+            // Jika error fatal dan folder session belum pernah connected, hapus folder partial
+            if (!qrData[session_id] || qrData[session_id]?.status !== 'connected') {
+                if (fs.existsSync(sessionPath) && !fs.existsSync(path.join(sessionPath, 'creds.json'))) {
+                    fs.rmSync(sessionPath, { recursive: true, force: true });
+                    console.log(`[WA] Folder partial dihapus: ${sessionPath}`);
+                }
+            }
         }
     }
 
