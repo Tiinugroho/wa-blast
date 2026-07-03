@@ -33,6 +33,7 @@ const sessions = {};
 const qrData = {};
 const userInfo = {};
 const killedSessions = {};
+const pendingSessions = {};
 
 function shouldReuseExistingSession(status) {
     return ['loading', 'qr_ready', 'connected'].includes(status);
@@ -138,6 +139,10 @@ app.post('/api/wa/start', async (req, res) => {
     delete killedSessions[session_id];
 
     const existingStatus = qrData[session_id]?.status;
+    if (pendingSessions[session_id]) {
+        return res.json(qrData[session_id] || { status: 'loading', qr: null });
+    }
+
     if (sessions[session_id] && shouldReuseExistingSession(existingStatus)) {
         if (existingStatus === 'connected') {
             return res.json({ status: 'connected', message: 'Session sudah aktif' });
@@ -149,6 +154,9 @@ app.post('/api/wa/start', async (req, res) => {
 
     async function connectToWA() {
         if (killedSessions[session_id]) return;
+        if (pendingSessions[session_id] && sessions[session_id]) return;
+
+        pendingSessions[session_id] = true;
 
         try {
             const sessionPath = path.join(sessionDir, session_id);
@@ -164,6 +172,7 @@ app.post('/api/wa/start', async (req, res) => {
             });
 
             sessions[session_id] = sock;
+            delete pendingSessions[session_id];
             sock.ev.on('creds.update', saveCreds);
 
             sock.ev.on('connection.update', async (update) => {
@@ -218,6 +227,7 @@ app.post('/api/wa/start', async (req, res) => {
                 }
             });
         } catch (err) {
+            delete pendingSessions[session_id];
             console.log(`[WA] CRITICAL ERROR ${session_id}:`, err.message);
             // Jika error fatal dan folder session belum pernah connected, hapus folder partial
             if (!qrData[session_id] || qrData[session_id]?.status !== 'connected') {
