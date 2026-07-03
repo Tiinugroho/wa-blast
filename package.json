@@ -1,0 +1,17 @@
+{
+    "name": "wa-blast-api",
+    "version": "1.0.0",
+    "description": "WhatsApp Blast API menggunakan Baileys",
+    "main": "app.js",
+    "type": "module",
+    "scripts": {
+        "start": "node app.js"
+    },
+    "dependencies": {
+        "@whiskeysockets/baileys": "^6.7.0",
+        "cors": "^2.8.5",
+        "express": "^4.19.2",
+        "pino": "^8.20.0",
+        "qrcode": "^1.5.3"
+    }
+}

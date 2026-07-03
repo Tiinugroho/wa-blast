@@ -1,0 +1,12 @@
+# Node modules
+node_modules/
+npm-debug.log
+
+# Mac hidden files
+.DS_Store
+
+# Environment variables (jika nanti ada file .env)
+.env
+
+# WA Baileys Sessions (JANGAN PERNAH DI-PUSH!)
+wa_sessions/
