@@ -165,11 +165,11 @@ app.post('/api/wa/start', async (req, res) => {
                 printQRInTerminal: false,
                 logger: pino({ level: 'silent' }),
                 browser: ['Ruang Restu', 'Safari', '1.0.0'],
-                version
+                version,
+                syncFullHistory: false
             });
 
             sessions[session_id] = sock;
-            delete pendingSessions[session_id];
             sock.ev.on('creds.update', saveCreds);
 
             sock.ev.on('connection.update', async (update) => {
@@ -194,12 +194,14 @@ app.post('/api/wa/start', async (req, res) => {
                         status: 'connected',
                         user: userInfo[session_id]
                     };
+                    pendingSessions[session_id] = false;
                 }
 
                 if (connection === 'close') {
                     const statusCode = lastDisconnect?.error?.output?.statusCode;
                     const isLoggedOut = [DisconnectReason.loggedOut, 401, 405].includes(statusCode);
-                    const shouldReconnectNow = shouldAutoReconnect(qrData[session_id]?.status);
+                    const currentStatus = qrData[session_id]?.status;
+                    const shouldReconnectNow = currentStatus === 'connected';
 
                     console.log(`[WA] ${session_id} CLOSED. Code: ${statusCode}`);
 
@@ -217,8 +219,10 @@ app.post('/api/wa/start', async (req, res) => {
                     } else if (shouldReconnectNow) {
                         setTimeout(() => connectToWA(), 5000);
                     } else {
-                        delete sessions[session_id];
-                        qrData[session_id] = { status: 'disconnected' };
+                        qrData[session_id] = {
+                            status: 'connecting',
+                            message: 'Menyambungkan ke WhatsApp...'
+                        };
                     }
                 }
             });
@@ -272,13 +276,15 @@ app.post('/api/wa/logout', async (req, res) => {
 
 // ================= GET STATUS =================
 app.get('/api/wa/status/:session_id', (req, res) => {
+    res.set('Content-Type', 'application/json; charset=utf-8');
     res.json(qrData[req.params.session_id] || { status: 'disconnected' });
 });
 
 app.get('/', (req, res) => {
-    res.json({
-        status: "success",
-        message: "WA Engine Ruang Restu is running successfully!"
+    res.set('Content-Type', 'application/json; charset=utf-8');
+    res.status(200).json({
+        status: 'success',
+        message: 'WA Engine Ruang Restu is running successfully!'
     });
 });
 
