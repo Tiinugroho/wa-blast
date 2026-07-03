@@ -252,6 +252,13 @@ app.get('/api/wa/status/:session_id', (req, res) => {
     res.json(qrData[req.params.session_id] || { status: 'disconnected' });
 });
 
+app.get('/', (req, res) => {
+    res.json({
+        status: "success",
+        message: "WA Engine Ruang Restu is running successfully!"
+    });
+});
+
 // ================= SEND MESSAGE =================
 app.post('/api/wa/send', async (req, res) => {
     const { session_id, number, message } = req.body;
