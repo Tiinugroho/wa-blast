@@ -147,7 +147,7 @@ app.post('/api/wa/start', async (req, res) => {
         return res.json(qrData[session_id] || { status: 'loading', qr: null });
     }
 
-    qrData[session_id] = { status: 'loading', qr: null };
+    qrData[session_id] = { status: 'loading', qr: null, timestamp: Date.now() };
 
     async function connectToWA() {
         if (killedSessions[session_id]) return;
@@ -178,7 +178,8 @@ app.post('/api/wa/start', async (req, res) => {
                 if (qr) {
                     qrData[session_id] = {
                         status: 'qr_ready',
-                        qr: await qrcode.toDataURL(qr)
+                        qr: await qrcode.toDataURL(qr),
+                        timestamp: Date.now()
                     };
                 }
 
@@ -192,7 +193,8 @@ app.post('/api/wa/start', async (req, res) => {
                     };
                     qrData[session_id] = {
                         status: 'connected',
-                        user: userInfo[session_id]
+                        user: userInfo[session_id],
+                        timestamp: Date.now()
                     };
                     pendingSessions[session_id] = false;
                 }
@@ -219,13 +221,15 @@ app.post('/api/wa/start', async (req, res) => {
                     } else if (shouldReconnectNow) {
                         qrData[session_id] = {
                             status: 'reconnecting',
-                            message: 'Menghubungkan ulang ke WhatsApp...'
+                            message: 'Menghubungkan ulang ke WhatsApp...',
+                            timestamp: Date.now()
                         };
                         setTimeout(() => connectToWA(), 5000);
                     } else {
                         qrData[session_id] = {
                             status: 'connecting',
-                            message: 'Menyambungkan ke WhatsApp...'
+                            message: 'Menyambungkan ke WhatsApp...',
+                            timestamp: Date.now()
                         };
                     }
                 }
@@ -280,9 +284,16 @@ app.post('/api/wa/logout', async (req, res) => {
 
 // ================= GET STATUS =================
 app.get('/api/wa/status/:session_id', (req, res) => {
+    const sessionId = req.params.session_id;
+    const state = qrData[sessionId] || { status: 'disconnected' };
+
     res.set('Content-Type', 'application/json; charset=utf-8');
     res.set('Cache-Control', 'no-store');
-    res.status(200).json(qrData[req.params.session_id] || { status: 'disconnected' });
+    res.status(200).json({
+        ...state,
+        session_id: sessionId,
+        timestamp: Date.now()
+    });
 });
 
 app.get('/', (req, res) => {
