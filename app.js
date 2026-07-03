@@ -6,7 +6,8 @@ import {
     DisconnectReason,
     fetchLatestBaileysVersion,
     initAuthCreds,
-    BufferJSON
+    BufferJSON,
+    useMultiFileAuthState
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
 import fs from 'fs';
@@ -150,27 +151,29 @@ app.post('/api/wa/start', async (req, res) => {
     qrData[session_id] = { status: 'loading', qr: null, timestamp: Date.now() };
 
     async function connectToWA() {
-        if (killedSessions[session_id]) return;
-        if (pendingSessions[session_id] && sessions[session_id]) return;
+    if (killedSessions[session_id]) return;
+    if (pendingSessions[session_id] && sessions[session_id]) return;
 
-        pendingSessions[session_id] = true;
+    pendingSessions[session_id] = true;
 
-        try {
-            const sessionPath = path.join(sessionDir, session_id);
-            const { state, saveCreds, setConnected } = await useSmartAuthState(sessionPath);
-            const { version } = await fetchLatestBaileysVersion();
+    try {
+        const sessionPath = path.join(sessionDir, session_id);
+        
+        // GUNAKAN FUNGSI BAWAAN BAILEYS
+        const { state, saveCreds } = await useMultiFileAuthState(sessionPath);
+        const { version } = await fetchLatestBaileysVersion();
 
-            const sock = makeWASocket({
-                auth: state,
-                printQRInTerminal: false,
-                logger: pino({ level: 'silent' }),
-                browser: ['Ruang Restu', 'Safari', '1.0.0'],
-                version,
-                syncFullHistory: false
-            });
+        const sock = makeWASocket({
+            auth: state,
+            printQRInTerminal: false,
+            logger: pino({ level: 'silent' }),
+            browser: ['Ruang Restu', 'Safari', '1.0.0'],
+            version,
+            syncFullHistory: false
+        });
 
-            sessions[session_id] = sock;
-            sock.ev.on('creds.update', saveCreds);
+        sessions[session_id] = sock;
+        sock.ev.on('creds.update', saveCreds);
 
             sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
