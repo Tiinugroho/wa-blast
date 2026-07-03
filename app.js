@@ -3,11 +3,9 @@ import cors from 'cors';
 import qrcode from 'qrcode';
 import {
     makeWASocket,
-    useMultiFileAuthState,
     DisconnectReason,
     fetchLatestBaileysVersion,
     initAuthCreds,
-    proto,
     BufferJSON
 } from '@whiskeysockets/baileys';
 import pino from 'pino';
@@ -178,16 +176,8 @@ app.post('/api/wa/start', async (req, res) => {
             sock.ev.on('connection.update', async (update) => {
                 const { connection, lastDisconnect, qr } = update;
 
-                if (qr) {
-                    qrData[session_id] = {
-                        status: 'qr_ready',
-                        qr: await qrcode.toDataURL(qr)
-                    };
-                }
-
                 if (connection === 'open') {
                     console.log(`[WA] ${session_id} CONNECTED ✅`);
-                    // Aktifkan penyimpanan ke disk setelah berhasil login
                     setConnected(true);
 
                     userInfo[session_id] = {
@@ -197,6 +187,13 @@ app.post('/api/wa/start', async (req, res) => {
                     qrData[session_id] = {
                         status: 'connected',
                         user: userInfo[session_id]
+                    };
+                }
+
+                if (qr && connection !== 'open') {
+                    qrData[session_id] = {
+                        status: 'qr_ready',
+                        qr: await qrcode.toDataURL(qr)
                     };
                 }
 
